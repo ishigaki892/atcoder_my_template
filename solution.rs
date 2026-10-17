@@ -2,6 +2,7 @@
 // AtCoder Rust Template
 // version4
 // made by ishigaki122 & Claude AI
+// https://github.com/ishigaki892/atcoder_my_template
 // ============================================================
 
 #![allow(unused_imports, unused_macros, dead_code, non_upper_case_globals)]
@@ -14,7 +15,6 @@ use proconio::marker::{Bytes, Chars, Isize1, Usize1};
 use std::cmp::{max, min, Reverse};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 use std::mem::swap;
-use std::vec;
 use superslice::Ext;
 
 // ------------------------------------------------------------
@@ -23,7 +23,6 @@ use superslice::Ext;
 
 const MOD: u64 = 998_244_353;
 const MOD7: u64 = 1_000_000_007;
-const BASE: u64 = 31; // Rolling Hash用
 const INF: i64 = 1 << 60;
 const EPS: f64 = 1e-9;
 const DX: [isize; 8] = [-1, 0, 1, 0, 1, 1, -1, -1];
@@ -85,6 +84,8 @@ macro_rules! YN {
 // メイン処理
 // ------------------------------------------------------------
 
+// fastout は「付けた関数の中の println!」だけをバッファ化するので、出力する solve 側に付ける
+#[proconio::fastout]
 fn solve() {
     input! {
         n: usize,
@@ -94,11 +95,10 @@ fn solve() {
     println!("{:?}", a);
 }
 
-#[proconio::fastout]
 fn main() {
-    input! {}
-
     solve();
+    // 深い再帰DFSでスタックが足りない場合は上の行の代わりにこちらを使う
+    // std::thread::Builder::new().stack_size(1 << 28).spawn(solve).unwrap().join().unwrap();
 }
 
 // ------------------------------------------------------------
@@ -232,8 +232,11 @@ fn from_n_base(digits: &[u64], base: u64) -> u64 {
     res
 }
 
-/// 桁数カウント
+/// 桁数カウント（0 は 1 桁）
 fn cnt_keta(n: usize) -> usize {
+    if n == 0 {
+        return 1;
+    }
     let mut s = n;
     let mut ans = 0;
     while s > 0 {
@@ -254,40 +257,31 @@ fn sum_keta(n: usize) -> usize {
     ans
 }
 
-/// 整数平方根
+/// 整数平方根 floor(sqrt(n))（usize全域で正しい）
 fn isqrt(n: usize) -> usize {
-    if n < 2 {
-        return n;
+    // f64 で概算してから u128 で誤差を補正する
+    let mut x = (n as f64).sqrt() as u128;
+    let n = n as u128;
+    while x * x > n {
+        x -= 1;
     }
-
-    let mut ok = 0;
-    let mut ng = 2_000_000_000usize;
-
-    while ng - ok > 1 {
-        let mid = ok + (ng - ok) / 2;
-        if mid * mid <= n {
-            ok = mid;
-        } else {
-            ng = mid;
-        }
+    while (x + 1) * (x + 1) <= n {
+        x += 1;
     }
-    ok
+    x as usize
 }
 
-/// 三乗根
+/// 整数三乗根 floor(cbrt(n))（usize全域で正しい）
 fn cbrt(n: usize) -> usize {
-    let mut ok = 0;
-    let mut ng = 1_000_001;
-
-    while ng - ok > 1 {
-        let mid = (ok + ng) / 2;
-        if mid * mid * mid <= n {
-            ok = mid;
-        } else {
-            ng = mid;
-        }
+    let mut x = (n as f64).cbrt() as u128;
+    let n = n as u128;
+    while x * x * x > n {
+        x -= 1;
     }
-    ok
+    while (x + 1) * (x + 1) * (x + 1) <= n {
+        x += 1;
+    }
+    x as usize
 }
 
 /// 整数の床除算（a / b の床）
@@ -395,13 +389,15 @@ fn factorial(n: usize) -> usize {
 /// 約数を全列挙
 fn divisors(n: usize) -> Vec<usize> {
     let mut divs = Vec::new();
-    for i in 1..=((n as f64).sqrt() as usize) {
+    let mut i = 1usize;
+    while i * i <= n {
         if n % i == 0 {
             divs.push(i);
             if i != n / i {
                 divs.push(n / i);
             }
         }
+        i += 1;
     }
     divs.sort();
     divs
@@ -699,7 +695,7 @@ fn rle<T: PartialEq + Clone>(items: &[T]) -> Vec<(T, usize)> {
     res
 }
 
-/// (l..r)のうちaを超える最大値のインデックスの最小値
+/// [l, r) のうち値が a 以上である最小のインデックス（無ければ None）
 fn find_first_ge(seg: &Segtree<Max<i64>>, l: usize, r: usize, a: i64) -> Option<usize> {
     let v = seg.max_right(l, |&v| v < a);
     if v < r {
@@ -787,11 +783,21 @@ impl Kmp {
 
 /// Manacher法
 /// 文字と文字の間に番兵(区切り)を挟んだ長さ `2n-1` の列 t を考え、
-/// t の各中心 i について「t[i]を中心とする奇数長回文の半径」r[i] を O(n) で求める。
+/// t の各中心 i について「t上で何歩まで左右が一致するか」r[i] を O(n) で求める。
 /// t[2i] = s[i] （元の文字）、t[2i+1] = 区切り、に対応する。
-/// ## 使い方（元の文字列上での回文半径への変換）
-/// * s[i] を中心とする奇数長回文の半径（文字数） = r[2*i]
-/// * s[i], s[i+1] の間を中心とする偶数長回文の半径（文字数） = r[2*i+1]
+/// 区切り同士は常に一致するため r[i] はそのまま s 上の長さにはならない。
+/// 元の文字列上での回文の長さは palindrome_len(&r, i) で求めること。
+/// * s[i] を中心とする最長奇数長回文の長さ = palindrome_len(&r, 2*i)
+/// * s[i], s[i+1] の間を中心とする最長偶数長回文の長さ = palindrome_len(&r, 2*i+1)
+/// * 回文の開始位置 = (i + 1 - len) / 2 （s上のインデックス）
+fn palindrome_len(r: &[usize], i: usize) -> usize {
+    if (i + r[i]) % 2 == 0 {
+        r[i] + 1
+    } else {
+        r[i]
+    }
+}
+
 fn manacher<T: PartialEq + Clone>(s: &[T]) -> Vec<usize> {
     let n = s.len();
     if n == 0 {
@@ -895,11 +901,13 @@ impl Trie {
 /// ac.add_pattern(b"she");
 /// ac.build();
 /// let hits = ac.search(b"ushers"); // (終了位置, パターンindex) のリスト
+/// let cnt = ac.count_matches(b"ushers"); // 一致の総数
 struct AhoCorasick {
     children: Vec<[i32; 26]>,
     fail: Vec<usize>,
-    // このノードで終了するパターンのindex一覧（複数登録可）
+    // このノードで終了するパターンのindex一覧（build後はfail先の分も含む）
     outputs: Vec<Vec<usize>>,
+    pattern_cnt: usize,
 }
 
 impl AhoCorasick {
@@ -908,9 +916,11 @@ impl AhoCorasick {
             children: vec![[-1; 26]],
             fail: vec![0],
             outputs: vec![vec![]],
+            pattern_cnt: 0,
         }
     }
 
+    /// パターンを追加し、そのパターンindex（追加した順に 0, 1, 2, ...）を返す
     fn add_pattern(&mut self, s: &[u8]) -> usize {
         let mut cur = 0usize;
         for &c in s {
@@ -923,9 +933,10 @@ impl AhoCorasick {
             }
             cur = self.children[cur][idx] as usize;
         }
-        let pat_id = 0; // 呼び出し側で管理したい場合は戻り値のノードにひもづけて使う
+        let pat_id = self.pattern_cnt;
+        self.pattern_cnt += 1;
         self.outputs[cur].push(pat_id);
-        cur
+        pat_id
     }
 
     /// BFSでfailリンクを構築する。add_pattern を全て呼んだ後に一度だけ呼ぶ
@@ -955,9 +966,22 @@ impl AhoCorasick {
         }
     }
 
-    /// text を1文字ずつ流し、各位置で一致した出力（登録済みパターンのノードID）を返す
-    /// ## 出力
-    /// `vec[i]` - text[0..=i] を読み終えた時点でマッチが終了したノード一覧の個数（何個パターンが終端したか）
+    /// text 中の全一致を (終了位置(含む), パターンindex) のリストで返す
+    /// パターンの開始位置は 終了位置 + 1 - パターン長
+    fn search(&self, text: &[u8]) -> Vec<(usize, usize)> {
+        let mut cur = 0usize;
+        let mut res = vec![];
+        for (i, &c) in text.iter().enumerate() {
+            let idx = (c - b'a') as usize;
+            cur = self.children[cur][idx] as usize;
+            for &p in &self.outputs[cur] {
+                res.push((i, p));
+            }
+        }
+        res
+    }
+
+    /// text 中でパターンが一致した回数の総数（重複・包含も全て数える）
     fn count_matches(&self, text: &[u8]) -> i64 {
         let mut cur = 0usize;
         let mut total = 0i64;
@@ -979,22 +1003,21 @@ fn suffix_array(s: &[u8]) -> Vec<usize> {
     let mut tmp = vec![0i64; n];
     let mut k = 1usize;
 
-    let compare =
-        |rank: &Vec<i64>, tmp: &Vec<i64>, k: usize, a: usize, b: usize| -> std::cmp::Ordering {
-            if rank[a] != rank[b] {
-                return rank[a].cmp(&rank[b]);
-            }
-            let ra = if a + k < n { rank[a + k] } else { -1 };
-            let rb = if b + k < n { rank[b + k] } else { -1 };
-            ra.cmp(&rb)
-        };
+    let compare = |rank: &Vec<i64>, k: usize, a: usize, b: usize| -> std::cmp::Ordering {
+        if rank[a] != rank[b] {
+            return rank[a].cmp(&rank[b]);
+        }
+        let ra = if a + k < n { rank[a + k] } else { -1 };
+        let rb = if b + k < n { rank[b + k] } else { -1 };
+        ra.cmp(&rb)
+    };
 
     while k < n {
-        sa.sort_by(|&a, &b| compare(&rank, &tmp, k, a, b));
+        sa.sort_by(|&a, &b| compare(&rank, k, a, b));
         tmp[sa[0]] = 0;
         for i in 1..n {
             tmp[sa[i]] = tmp[sa[i - 1]]
-                + if compare(&rank, &tmp, k, sa[i - 1], sa[i]) == std::cmp::Ordering::Less {
+                + if compare(&rank, k, sa[i - 1], sa[i]) == std::cmp::Ordering::Less {
                     1
                 } else {
                     0
@@ -1039,20 +1062,30 @@ fn lcp_array(s: &[u8], sa: &[usize]) -> Vec<usize> {
 
 /// Double Rolling Hash（衝突確率を大幅に下げた二重ハッシュ）
 /// (h1, h2) のペアで一致判定することでハッシュ衝突をほぼ無視できる
+/// 基数は実行ごとにランダム。2つの文字列を比較するときは with_base で同じ基数を使うこと
 struct DoubleRollingHash {
     hash1: Vec<u64>,
     hash2: Vec<u64>,
     pow1: Vec<u64>,
     pow2: Vec<u64>,
+    bases: (u64, u64),
 }
 
 impl DoubleRollingHash {
     const MOD1: u64 = 1_000_000_007;
     const MOD2: u64 = 998_244_353;
-    const BASE1: u64 = 1007;
-    const BASE2: u64 = 2009;
 
     fn new(s: &[u8]) -> Self {
+        let r = random_u64();
+        let bases = (
+            (r & 0xFFFF_FFFF) % (Self::MOD1 - 1000) + 500,
+            (r >> 32) % (Self::MOD2 - 1000) + 500,
+        );
+        Self::with_base(s, bases)
+    }
+
+    fn with_base(s: &[u8], bases: (u64, u64)) -> Self {
+        let (b1, b2) = bases;
         let n = s.len();
         let mut hash1 = vec![0u64; n + 1];
         let mut hash2 = vec![0u64; n + 1];
@@ -1060,16 +1093,17 @@ impl DoubleRollingHash {
         let mut pow2 = vec![1u64; n + 1];
         for i in 0..n {
             let c = s[i] as u64 + 1;
-            hash1[i + 1] = (hash1[i] * Self::BASE1 + c) % Self::MOD1;
-            hash2[i + 1] = (hash2[i] * Self::BASE2 + c) % Self::MOD2;
-            pow1[i + 1] = pow1[i] * Self::BASE1 % Self::MOD1;
-            pow2[i + 1] = pow2[i] * Self::BASE2 % Self::MOD2;
+            hash1[i + 1] = (hash1[i] * b1 + c) % Self::MOD1;
+            hash2[i + 1] = (hash2[i] * b2 + c) % Self::MOD2;
+            pow1[i + 1] = pow1[i] * b1 % Self::MOD1;
+            pow2[i + 1] = pow2[i] * b2 % Self::MOD2;
         }
         Self {
             hash1,
             hash2,
             pow1,
             pow2,
+            bases,
         }
     }
 
@@ -1301,8 +1335,8 @@ fn ntt(f: &mut Vec<ModInt998244353>, invert: bool) {
 // セグメントツリー
 // ------------------------------------------------------------
 
-//let mut seg = Segtree::<Sum>::from(vec![0; n]);
-//一点更新+区間加算
+//let mut seg = Segtree::<Sum>::from(vec![(0i64, 1i64); n]); // 各要素 (値, 1) で初期化
+//一点更新+区間和（要素数も持つので遅延セグ木の RangeAddRangeSum 等と共用できる）
 
 struct Sum;
 impl Monoid for Sum {
@@ -1772,29 +1806,57 @@ impl<T: Ord> Multiset<T> {
     }
 }
 
-/// Rolling Hash
+/// 実行ごとに変わる乱数を1つ返す（ハッシュの基数などに使う）
+fn random_u64() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    h.write_u64(0x9E37_79B9_7F4A_7C15);
+    h.finish()
+}
+
+/// Rolling Hash（mod 2^61-1, 基数は実行ごとにランダム）
+/// 単一mod 1e9 程度だと 10^5 個の比較で普通に衝突するため、2^61-1 を使う
+/// let rh = RollingHash::new(s.as_bytes());
+/// rh.get_hash(l, r) // s[l..r) のハッシュ
+/// 2つの文字列を比較するときは RollingHash::with_base(t, rh.base) で同じ基数を使うこと
 struct RollingHash {
     hash: Vec<u64>,
     power: Vec<u64>,
+    base: u64,
 }
 
 impl RollingHash {
-    fn new(s: &str) -> Self {
-        let n = s.len();
-        let mut hash = vec![0; n + 1];
-        let mut power = vec![1; n + 1];
+    const MOD: u64 = (1u64 << 61) - 1;
 
-        for (i, c) in s.chars().enumerate() {
-            hash[i + 1] = (hash[i] * BASE + (c as u64 - 'a' as u64 + 1)) % MOD;
-            power[i + 1] = (power[i] * BASE) % MOD;
+    fn mul(a: u64, b: u64) -> u64 {
+        let t = a as u128 * b as u128;
+        let t = (t >> 61) as u64 + (t as u64 & Self::MOD);
+        if t >= Self::MOD {
+            t - Self::MOD
+        } else {
+            t
         }
-
-        Self { hash, power }
     }
 
+    fn new(s: &[u8]) -> Self {
+        let base = random_u64() % (Self::MOD - 1000) + 500;
+        Self::with_base(s, base)
+    }
+
+    fn with_base(s: &[u8], base: u64) -> Self {
+        let n = s.len();
+        let mut hash = vec![0u64; n + 1];
+        let mut power = vec![1u64; n + 1];
+        for i in 0..n {
+            hash[i + 1] = (Self::mul(hash[i], base) + s[i] as u64 + 1) % Self::MOD;
+            power[i + 1] = Self::mul(power[i], base);
+        }
+        Self { hash, power, base }
+    }
+
+    /// s[l..r) のハッシュ値
     fn get_hash(&self, l: usize, r: usize) -> u64 {
-        let h = (self.hash[r] + MOD - (self.hash[l] * self.power[r - l]) % MOD) % MOD;
-        h
+        (self.hash[r] + Self::MOD - Self::mul(self.hash[l], self.power[r - l])) % Self::MOD
     }
 }
 
@@ -1985,7 +2047,10 @@ impl<T: Ord> IndexMonotonicQueue<T> {
     }
 }
 
-/// LIS（最長増加部分列の長さ）
+/// LIS（狭義単調増加）
+/// ## 出力
+/// `dp[k]` - 長さ k+1 の増加部分列の末尾として取りうる最小値。LISの長さは `dp.len()`
+/// （dp自体はLISそのものではないので、復元したい場合は lis_restore を使う）
 fn lis(sequence: &Vec<i64>) -> Vec<i64> {
     let mut dp = Vec::new();
     for &x in sequence {
@@ -2413,6 +2478,7 @@ fn topo(graph: &[Vec<(usize, i64)>]) -> Option<Vec<usize>> {
 }
 
 /// 木の直径（最も遠い2頂点間のステップ数）
+/// 辺の重みは無視する（重み付きの直径が欲しい場合は bfs の代わりに djk を使う）
 /// ### 計算量 O(N+M)
 fn tree_diameter(graph: &[Vec<(usize, i64)>]) -> i64 {
     if graph.is_empty() {
@@ -2657,10 +2723,11 @@ impl Hld {
 /// 全ての頂点を根としたときの木DPの値を まとめて O(N) で求める
 /// ## 型パラメータ
 /// * `M::S` - 部分木の集約値（モノイド）
+/// * `merge(a, b)` - 2つの子部分木の集約値を結合する（結合的・可換であること）
 /// * `add_root(x, v)` - 頂点vの寄与を集約値xに追加する（子の集約値 → 頂点vを含めた値）
-/// * `add_edge(x, edge_weight)` - 辺の重みを使って値xを変換する（重みなし木なら何もしない）
+/// 辺の重みは扱わない（必要なら add_root 内で頂点に重みを持たせるなどで対応する）
 /// ## 使い方
-/// let rerooting = Rerooting::new(n, &edges, identity, |acc, v| ..., |acc, w| ...);
+/// let rerooting = Rerooting::new(n, &edges, identity, |a, b| ..., |acc, v| ...);
 /// let ans: Vec<S> = rerooting.solve(); // ans[v] = vを根としたときの木DP値
 struct Rerooting<S, F1, F2>
 where
@@ -2864,7 +2931,7 @@ impl TwoSat {
     }
 
     /// 充足可能なら各変数の真偽値の割り当てを返す。不可能なら None
-    fn solve(mut self) -> Option<Vec<bool>> {
+    fn solve(self) -> Option<Vec<bool>> {
         let groups = self.scc.scc();
         let mut comp_id = vec![0usize; 2 * self.n];
         for (gi, g) in groups.iter().enumerate() {
@@ -2877,9 +2944,9 @@ impl TwoSat {
             if comp_id[2 * i] == comp_id[2 * i + 1] {
                 return None;
             }
-            // ac_library::SccGraph::scc() は「u→vという辺があれば comp[v] <= comp[u]」となる順序で
-            // グループを返す（逆トポロジカル順）。ノード 2*i+1 が「x_i = true」に対応するので、
-            // comp[2*i+1] > comp[2*i] なら x_i = true とする。
+            // ac_library::SccGraph::scc() は「u→vという辺があれば comp[u] <= comp[v]」となる
+            // トポロジカル順でグループを返す。ノード 2*i+1 が「x_i = true」に対応し、
+            // トポロジカル順で後ろにある方を真にすればよいので、comp[2*i+1] > comp[2*i] なら x_i = true。
             ans[i] = comp_id[2 * i + 1] > comp_id[2 * i];
         }
         Some(ans)
@@ -2889,7 +2956,7 @@ impl TwoSat {
 // ------------------------------------------------------------
 // Scc（強連結成分分解）使用例（ac_library）
 // ------------------------------------------------------------
-// let mut scc = Scc::new(n);
+// let mut scc = ac_library::SccGraph::new(n);
 // scc.add_edge(u, v);
 // let groups: Vec<Vec<usize>> = scc.scc(); // トポロジカル順にグループ化された頂点集合
 
@@ -2954,7 +3021,7 @@ impl LiChaoTree {
 
         let (mut cur_a, mut cur_b) = self.line[node];
         let mut left_better = Self::eval(a, b, xl) < Self::eval(cur_a, cur_b, xl);
-        let mut mid_better = Self::eval(a, b, xm) < Self::eval(cur_a, cur_b, xm);
+        let mid_better = Self::eval(a, b, xm) < Self::eval(cur_a, cur_b, xm);
 
         if mid_better {
             std::mem::swap(&mut a, &mut cur_a);
@@ -2981,7 +3048,7 @@ impl LiChaoTree {
     }
 
     /// x座標のインデックス（xsの何番目か）を指定してクエリする
-    fn query_by_index(&self, mut i: usize) -> i64 {
+    fn query_by_index(&self, i: usize) -> i64 {
         let x = self.get_x(i);
         let mut node = 0usize;
         let mut l = 0usize;
@@ -3005,9 +3072,12 @@ impl LiChaoTree {
         res
     }
 
-    /// 実際のx座標を指定してクエリする（構築時に渡した xs の中の値であること）
+    /// 実際のx座標を指定してクエリする（構築時に渡した xs の中の値であること。無ければ panic）
     fn query(&self, x: i64) -> i64 {
-        let i = self.xs.binary_search(&x).unwrap_or(0);
+        let i = self
+            .xs
+            .binary_search(&x)
+            .expect("LiChaoTree::query: x が構築時の xs に含まれていません");
         self.query_by_index(i)
     }
 }
@@ -3225,294 +3295,303 @@ impl WaveletMatrix {
 /// ac_library::MapMonoid と同じ考え方で「値のモノイド」と「作用」を1つの
 /// トレイトにまとめている。追加で reverse() を要求する点だけが違う。
 /// 値の集約(モノイド)と、区間への作用(マッピング)を定義するトレイト。
-pub trait TMapMonoid {
-    /// 集約される値の型 (区間の集約結果)
-    type S: Clone;
-    /// 区間に適用する作用の型
-    type F: Clone;
+pub mod treap {
+    use std::mem::swap;
 
-    /// Sの単位元
-    fn identity() -> Self::S;
-    /// Sの二項演算 (結合律を満たすこと)
-    fn op(a: &Self::S, b: &Self::S) -> Self::S;
-    /// 区間反転時に集約値Sをどう変換するか。
-    /// 和・min・max・xorなど「可換」な演算はデフォルト実装(そのまま返す)でよい。
-    /// 文字列連結・行列積など「非可換」な演算では左右を入れ替える処理を書く。
-    fn reverse(x: &Self::S) -> Self::S {
-        x.clone()
+    pub trait TMapMonoid {
+        /// 集約される値の型 (区間の集約結果)
+        type S: Clone;
+        /// 区間に適用する作用の型
+        type F: Clone;
+
+        /// Sの単位元
+        fn identity() -> Self::S;
+        /// Sの二項演算 (結合律を満たすこと)
+        fn op(a: &Self::S, b: &Self::S) -> Self::S;
+        /// 区間反転時に集約値Sをどう変換するか。
+        /// 和・min・max・xorなど「可換」な演算はデフォルト実装(そのまま返す)でよい。
+        /// 文字列連結・行列積など「非可換」な演算では左右を入れ替える処理を書く。
+        fn reverse(x: &Self::S) -> Self::S {
+            x.clone()
+        }
+
+        /// Fの単位元 (何もしない作用)
+        fn identity_map() -> Self::F;
+        /// Sに作用Fを適用する
+        fn mapping(f: &Self::F, x: &Self::S) -> Self::S;
+        /// 作用の合成: 「先にgを適用、後にfを適用」した結果と同じ効果になるようにする
+        fn composition(f: &Self::F, g: &Self::F) -> Self::F;
     }
 
-    /// Fの単位元 (何もしない作用)
-    fn identity_map() -> Self::F;
-    /// Sに作用Fを適用する
-    fn mapping(f: &Self::F, x: &Self::S) -> Self::S;
-    /// 作用の合成: 「先にgを適用、後にfを適用」した結果と同じ効果になるようにする
-    fn composition(f: &Self::F, g: &Self::F) -> Self::F;
-}
-
-// --- 優先度生成用の乱数 (xorshift64) ---
-struct Xorshift(u64);
-impl Xorshift {
-    fn new() -> Self {
-        Xorshift(0x2545_F491_4F6C_DD1D)
-    }
-    fn next(&mut self) -> u64 {
-        let mut x = self.0;
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        self.0 = x;
-        x
-    }
-}
-
-struct Node<M: TMapMonoid> {
-    val: M::S,  // このノード単体の値
-    acc: M::S,  // 部分木全体の集約値
-    lazy: M::F, // 未反映の作用
-    rev: bool,  // 反転フラグ
-    priority: u64,
-    size: usize,
-    left: Option<Box<Node<M>>>,
-    right: Option<Box<Node<M>>>,
-}
-
-impl<M: TMapMonoid> Node<M> {
-    fn new(val: M::S, priority: u64) -> Self {
-        Node {
-            acc: val.clone(),
-            val,
-            lazy: M::identity_map(),
-            rev: false,
-            priority,
-            size: 1,
-            left: None,
-            right: None,
+    // --- 優先度生成用の乱数 (xorshift64) ---
+    struct Xorshift(u64);
+    impl Xorshift {
+        fn new() -> Self {
+            Xorshift(0x2545_F491_4F6C_DD1D)
+        }
+        fn next(&mut self) -> u64 {
+            let mut x = self.0;
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            self.0 = x;
+            x
         }
     }
-}
 
-fn size<M: TMapMonoid>(node: &Option<Box<Node<M>>>) -> usize {
-    node.as_ref().map_or(0, |n| n.size)
-}
+    struct Node<M: TMapMonoid> {
+        val: M::S,  // このノード単体の値
+        acc: M::S,  // 部分木全体の集約値
+        lazy: M::F, // 未反映の作用
+        rev: bool,  // 反転フラグ
+        priority: u64,
+        size: usize,
+        left: Option<Box<Node<M>>>,
+        right: Option<Box<Node<M>>>,
+    }
 
-fn acc<M: TMapMonoid>(node: &Option<Box<Node<M>>>) -> M::S {
-    node.as_ref().map_or(M::identity(), |n| n.acc.clone())
-}
+    impl<M: TMapMonoid> Node<M> {
+        fn new(val: M::S, priority: u64) -> Self {
+            Node {
+                acc: val.clone(),
+                val,
+                lazy: M::identity_map(),
+                rev: false,
+                priority,
+                size: 1,
+                left: None,
+                right: None,
+            }
+        }
+    }
 
-/// 子を更新した後、部分木サイズ・集約値を再計算する
-fn update<M: TMapMonoid>(node: &mut Box<Node<M>>) {
-    node.size = 1 + size::<M>(&node.left) + size::<M>(&node.right);
-    node.acc = M::op(
-        &M::op(&acc::<M>(&node.left), &node.val),
-        &acc::<M>(&node.right),
-    );
-}
+    fn size<M: TMapMonoid>(node: &Option<Box<Node<M>>>) -> usize {
+        node.as_ref().map_or(0, |n| n.size)
+    }
 
-/// 未反映の反転フラグ・作用を子に伝播する
-fn push_down<M: TMapMonoid>(node: &mut Box<Node<M>>) {
-    if node.rev {
-        swap(&mut node.left, &mut node.right);
+    fn acc<M: TMapMonoid>(node: &Option<Box<Node<M>>>) -> M::S {
+        node.as_ref().map_or(M::identity(), |n| n.acc.clone())
+    }
+
+    /// 子を更新した後、部分木サイズ・集約値を再計算する
+    fn update<M: TMapMonoid>(node: &mut Box<Node<M>>) {
+        node.size = 1 + size::<M>(&node.left) + size::<M>(&node.right);
+        node.acc = M::op(
+            &M::op(&acc::<M>(&node.left), &node.val),
+            &acc::<M>(&node.right),
+        );
+    }
+
+    /// 未反映の反転フラグ・作用を子に伝播する
+    fn push_down<M: TMapMonoid>(node: &mut Box<Node<M>>) {
+        if node.rev {
+            swap(&mut node.left, &mut node.right);
+            if let Some(l) = node.left.as_mut() {
+                l.rev ^= true;
+                l.val = M::reverse(&l.val);
+                l.acc = M::reverse(&l.acc);
+            }
+            if let Some(r) = node.right.as_mut() {
+                r.rev ^= true;
+                r.val = M::reverse(&r.val);
+                r.acc = M::reverse(&r.acc);
+            }
+            node.rev = false;
+        }
+        let f = node.lazy.clone();
+        node.lazy = M::identity_map();
         if let Some(l) = node.left.as_mut() {
-            l.rev ^= true;
-            l.val = M::reverse(&l.val);
-            l.acc = M::reverse(&l.acc);
+            apply_node::<M>(l, &f);
         }
         if let Some(r) = node.right.as_mut() {
-            r.rev ^= true;
-            r.val = M::reverse(&r.val);
-            r.acc = M::reverse(&r.acc);
-        }
-        node.rev = false;
-    }
-    let f = node.lazy.clone();
-    node.lazy = M::identity_map();
-    if let Some(l) = node.left.as_mut() {
-        apply_node::<M>(l, &f);
-    }
-    if let Some(r) = node.right.as_mut() {
-        apply_node::<M>(r, &f);
-    }
-}
-
-fn apply_node<M: TMapMonoid>(node: &mut Box<Node<M>>, f: &M::F) {
-    node.val = M::mapping(f, &node.val);
-    node.acc = M::mapping(f, &node.acc);
-    node.lazy = M::composition(f, &node.lazy);
-}
-
-/// 木を先頭k個 [0,k) と残り [k,size) に分割する
-fn split<M: TMapMonoid>(
-    node: Option<Box<Node<M>>>,
-    k: usize,
-) -> (Option<Box<Node<M>>>, Option<Box<Node<M>>>) {
-    match node {
-        None => (None, None),
-        Some(mut n) => {
-            push_down::<M>(&mut n);
-            let ls = size::<M>(&n.left);
-            if k <= ls {
-                let (l, r) = split::<M>(n.left.take(), k);
-                n.left = r;
-                update::<M>(&mut n);
-                (l, Some(n))
-            } else {
-                let (l, r) = split::<M>(n.right.take(), k - ls - 1);
-                n.right = l;
-                update::<M>(&mut n);
-                (Some(n), r)
-            }
-        }
-    }
-}
-
-/// 2つの木を結合する (左木の全要素が右木より前という前提)
-fn merge<M: TMapMonoid>(l: Option<Box<Node<M>>>, r: Option<Box<Node<M>>>) -> Option<Box<Node<M>>> {
-    match (l, r) {
-        (None, r) => r,
-        (l, None) => l,
-        (Some(mut l), Some(mut r)) => {
-            if l.priority > r.priority {
-                push_down::<M>(&mut l);
-                l.right = merge::<M>(l.right.take(), Some(r));
-                update::<M>(&mut l);
-                Some(l)
-            } else {
-                push_down::<M>(&mut r);
-                r.left = merge::<M>(Some(l), r.left.take());
-                update::<M>(&mut r);
-                Some(r)
-            }
-        }
-    }
-}
-
-pub struct RBST<M: TMapMonoid> {
-    root: Option<Box<Node<M>>>,
-    rng: Xorshift,
-}
-
-impl<M: TMapMonoid> RBST<M> {
-    pub fn new() -> Self {
-        RBST {
-            root: None,
-            rng: Xorshift::new(),
+            apply_node::<M>(r, &f);
         }
     }
 
-    /// 配列から構築する O(N log N)
-    pub fn build(v: Vec<M::S>) -> Self {
-        let mut t = Self::new();
-        for x in v {
-            let n = t.len();
-            t.insert(n, x);
-        }
-        t
+    fn apply_node<M: TMapMonoid>(node: &mut Box<Node<M>>, f: &M::F) {
+        node.val = M::mapping(f, &node.val);
+        node.acc = M::mapping(f, &node.acc);
+        node.lazy = M::composition(f, &node.lazy);
     }
 
-    pub fn len(&self) -> usize {
-        size::<M>(&self.root)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// 位置pに値xを挿入する (0 <= p <= len())
-    pub fn insert(&mut self, p: usize, x: M::S) {
-        let new_node = Some(Box::new(Node::new(x, self.rng.next())));
-        let root = self.root.take();
-        let (l, r) = split::<M>(root, p);
-        self.root = merge::<M>(merge::<M>(l, new_node), r);
-    }
-
-    /// 位置pの要素を削除する
-    pub fn erase(&mut self, p: usize) {
-        let root = self.root.take();
-        let (l, r) = split::<M>(root, p);
-        let (_, r) = split::<M>(r, 1);
-        self.root = merge::<M>(l, r);
-    }
-
-    /// 位置pの値を取得する
-    pub fn get(&mut self, p: usize) -> M::S {
-        let root = self.root.take();
-        let (l, mid_r) = split::<M>(root, p);
-        let (mid, r) = split::<M>(mid_r, 1);
-        let val = mid.as_ref().unwrap().val.clone();
-        self.root = merge::<M>(merge::<M>(l, mid), r);
-        val
-    }
-
-    /// 位置pの値をxに設定する
-    pub fn set(&mut self, p: usize, x: M::S) {
-        let root = self.root.take();
-        let (l, mid_r) = split::<M>(root, p);
-        let (_mid, r) = split::<M>(mid_r, 1);
-        let new_mid = Some(Box::new(Node::new(x, self.rng.next())));
-        self.root = merge::<M>(merge::<M>(l, new_mid), r);
-    }
-
-    /// 区間[l, r)の集約値を取得する
-    pub fn fold(&mut self, l: usize, r: usize) -> M::S {
-        let root = self.root.take();
-        let (a, bc) = split::<M>(root, l);
-        let (b, c) = split::<M>(bc, r - l);
-        let result = acc::<M>(&b);
-        self.root = merge::<M>(merge::<M>(a, b), c);
-        result
-    }
-
-    /// 区間[l, r)に作用fを適用する
-    pub fn apply(&mut self, l: usize, r: usize, f: M::F) {
-        let root = self.root.take();
-        let (a, bc) = split::<M>(root, l);
-        let (mut b, c) = split::<M>(bc, r - l);
-        if let Some(node) = b.as_mut() {
-            apply_node::<M>(node, &f);
-        }
-        self.root = merge::<M>(merge::<M>(a, b), c);
-    }
-
-    /// 区間[l, r)を反転する
-    pub fn reverse(&mut self, l: usize, r: usize) {
-        let root = self.root.take();
-        let (a, bc) = split::<M>(root, l);
-        let (mut b, c) = split::<M>(bc, r - l);
-        if let Some(node) = b.as_mut() {
-            node.rev ^= true;
-            node.val = M::reverse(&node.val);
-            node.acc = M::reverse(&node.acc);
-        }
-        self.root = merge::<M>(merge::<M>(a, b), c);
-    }
-
-    /// 配列として復元する (デバッグ・出力用)
-    pub fn to_vec(&mut self) -> Vec<M::S> {
-        let mut result = Vec::with_capacity(self.len());
-        let root = self.root.take();
-        self.root = Self::collect(root, &mut result);
-        result
-    }
-
-    fn collect(node: Option<Box<Node<M>>>, out: &mut Vec<M::S>) -> Option<Box<Node<M>>> {
+    /// 木を先頭k個 [0,k) と残り [k,size) に分割する
+    fn split<M: TMapMonoid>(
+        node: Option<Box<Node<M>>>,
+        k: usize,
+    ) -> (Option<Box<Node<M>>>, Option<Box<Node<M>>>) {
         match node {
-            None => None,
+            None => (None, None),
             Some(mut n) => {
                 push_down::<M>(&mut n);
-                n.left = Self::collect(n.left.take(), out);
-                out.push(n.val.clone());
-                n.right = Self::collect(n.right.take(), out);
-                update::<M>(&mut n);
-                Some(n)
+                let ls = size::<M>(&n.left);
+                if k <= ls {
+                    let (l, r) = split::<M>(n.left.take(), k);
+                    n.left = r;
+                    update::<M>(&mut n);
+                    (l, Some(n))
+                } else {
+                    let (l, r) = split::<M>(n.right.take(), k - ls - 1);
+                    n.right = l;
+                    update::<M>(&mut n);
+                    (Some(n), r)
+                }
+            }
+        }
+    }
+
+    /// 2つの木を結合する (左木の全要素が右木より前という前提)
+    fn merge<M: TMapMonoid>(
+        l: Option<Box<Node<M>>>,
+        r: Option<Box<Node<M>>>,
+    ) -> Option<Box<Node<M>>> {
+        match (l, r) {
+            (None, r) => r,
+            (l, None) => l,
+            (Some(mut l), Some(mut r)) => {
+                if l.priority > r.priority {
+                    push_down::<M>(&mut l);
+                    l.right = merge::<M>(l.right.take(), Some(r));
+                    update::<M>(&mut l);
+                    Some(l)
+                } else {
+                    push_down::<M>(&mut r);
+                    r.left = merge::<M>(Some(l), r.left.take());
+                    update::<M>(&mut r);
+                    Some(r)
+                }
+            }
+        }
+    }
+
+    pub struct RBST<M: TMapMonoid> {
+        root: Option<Box<Node<M>>>,
+        rng: Xorshift,
+    }
+
+    impl<M: TMapMonoid> RBST<M> {
+        pub fn new() -> Self {
+            RBST {
+                root: None,
+                rng: Xorshift::new(),
+            }
+        }
+
+        /// 配列から構築する O(N log N)
+        pub fn build(v: Vec<M::S>) -> Self {
+            let mut t = Self::new();
+            for x in v {
+                let n = t.len();
+                t.insert(n, x);
+            }
+            t
+        }
+
+        pub fn len(&self) -> usize {
+            size::<M>(&self.root)
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.len() == 0
+        }
+
+        /// 位置pに値xを挿入する (0 <= p <= len())
+        pub fn insert(&mut self, p: usize, x: M::S) {
+            let new_node = Some(Box::new(Node::new(x, self.rng.next())));
+            let root = self.root.take();
+            let (l, r) = split::<M>(root, p);
+            self.root = merge::<M>(merge::<M>(l, new_node), r);
+        }
+
+        /// 位置pの要素を削除する
+        pub fn erase(&mut self, p: usize) {
+            let root = self.root.take();
+            let (l, r) = split::<M>(root, p);
+            let (_, r) = split::<M>(r, 1);
+            self.root = merge::<M>(l, r);
+        }
+
+        /// 位置pの値を取得する
+        pub fn get(&mut self, p: usize) -> M::S {
+            let root = self.root.take();
+            let (l, mid_r) = split::<M>(root, p);
+            let (mid, r) = split::<M>(mid_r, 1);
+            let val = mid.as_ref().unwrap().val.clone();
+            self.root = merge::<M>(merge::<M>(l, mid), r);
+            val
+        }
+
+        /// 位置pの値をxに設定する
+        pub fn set(&mut self, p: usize, x: M::S) {
+            let root = self.root.take();
+            let (l, mid_r) = split::<M>(root, p);
+            let (_mid, r) = split::<M>(mid_r, 1);
+            let new_mid = Some(Box::new(Node::new(x, self.rng.next())));
+            self.root = merge::<M>(merge::<M>(l, new_mid), r);
+        }
+
+        /// 区間[l, r)の集約値を取得する
+        pub fn fold(&mut self, l: usize, r: usize) -> M::S {
+            let root = self.root.take();
+            let (a, bc) = split::<M>(root, l);
+            let (b, c) = split::<M>(bc, r - l);
+            let result = acc::<M>(&b);
+            self.root = merge::<M>(merge::<M>(a, b), c);
+            result
+        }
+
+        /// 区間[l, r)に作用fを適用する
+        pub fn apply(&mut self, l: usize, r: usize, f: M::F) {
+            let root = self.root.take();
+            let (a, bc) = split::<M>(root, l);
+            let (mut b, c) = split::<M>(bc, r - l);
+            if let Some(node) = b.as_mut() {
+                apply_node::<M>(node, &f);
+            }
+            self.root = merge::<M>(merge::<M>(a, b), c);
+        }
+
+        /// 区間[l, r)を反転する
+        pub fn reverse(&mut self, l: usize, r: usize) {
+            let root = self.root.take();
+            let (a, bc) = split::<M>(root, l);
+            let (mut b, c) = split::<M>(bc, r - l);
+            if let Some(node) = b.as_mut() {
+                node.rev ^= true;
+                node.val = M::reverse(&node.val);
+                node.acc = M::reverse(&node.acc);
+            }
+            self.root = merge::<M>(merge::<M>(a, b), c);
+        }
+
+        /// 配列として復元する (デバッグ・出力用)
+        pub fn to_vec(&mut self) -> Vec<M::S> {
+            let mut result = Vec::with_capacity(self.len());
+            let root = self.root.take();
+            self.root = Self::collect(root, &mut result);
+            result
+        }
+
+        fn collect(node: Option<Box<Node<M>>>, out: &mut Vec<M::S>) -> Option<Box<Node<M>>> {
+            match node {
+                None => None,
+                Some(mut n) => {
+                    push_down::<M>(&mut n);
+                    n.left = Self::collect(n.left.take(), out);
+                    out.push(n.val.clone());
+                    n.right = Self::collect(n.right.take(), out);
+                    update::<M>(&mut n);
+                    Some(n)
+                }
             }
         }
     }
 }
+use treap::{TMapMonoid, RBST};
 
 // ========================= 使用例 =========================
 
 // 例1: 区間加算 + 区間和 (可換なのでreverseはデフォルト実装のままでよい)
+// ※ 遅延セグ木用の RangeAddRangeSum と名前が被るので、使うときは名前を変えること
 /*
 struct RangeAddRangeSum;
 impl TMapMonoid for RangeAddRangeSum {
