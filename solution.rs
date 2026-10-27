@@ -15,6 +15,7 @@ use proconio::marker::{Bytes, Chars, Isize1, Usize1};
 use std::cmp::{max, min, Reverse};
 use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};
 use std::mem::swap;
+use std::vec;
 use superslice::Ext;
 
 // ------------------------------------------------------------
@@ -1803,6 +1804,233 @@ impl<T: Ord> Multiset<T> {
         self.remove(&min_key);
 
         Some(min_key)
+    }
+}
+
+/// SortedMultiset（平方分割による順序付き多重集合）
+/// tatyam さんの Python 版 SortedMultiset の移植。値を先読みできないオンラインの問題向け
+/// ソート済みの小さな Vec（バケット）を √N 個程度並べて管理する
+/// 各操作 O(√N)（定数倍が軽いので N = 2*10^5 程度なら十分速い）
+/// 値を先読みできるなら BitLowerBound + 座標圧縮の方が速い
+/// ## 使い方
+/// let mut s = SortedMultiset::new();   // または SortedMultiset::from_vec(v)
+/// s.insert(x);          // x を追加
+/// s.remove(&x);         // x を1つ削除（無ければ false）
+/// s.get(k)              // k番目(0-indexed)に小さい値 Option<&T>
+/// s.pop(k)              // k番目を削除して返す Option<T>
+/// s.index(&x)           // x 未満の要素数（= x の順位）
+/// s.index_right(&x)     // x 以下の要素数
+/// s.count(&x)           // x の個数
+/// s.lt(&x) / s.le(&x)   // x 未満 / x 以下 の最大値 Option<&T>
+/// s.gt(&x) / s.ge(&x)   // x より大きい / x 以上 の最小値 Option<&T>
+/// s.min() / s.max() / s.len() / s.iter()
+#[derive(Clone, Debug, Default)]
+struct SortedMultiset<T> {
+    buckets: Vec<Vec<T>>, // 空のバケットは持たない
+    size: usize,
+}
+
+impl<T: Ord + Clone> SortedMultiset<T> {
+    const BUCKET_RATIO: usize = 16;
+    const SPLIT_RATIO: usize = 24;
+
+    fn new() -> Self {
+        Self {
+            buckets: vec![],
+            size: 0,
+        }
+    }
+
+    /// 任意の Vec から構築する O(N log N)
+    fn from_vec(mut v: Vec<T>) -> Self {
+        v.sort();
+        let n = v.len();
+        let bucket_cnt = ((n as f64 / Self::BUCKET_RATIO as f64).sqrt().ceil() as usize).max(1);
+        let mut buckets = Vec::with_capacity(bucket_cnt);
+        let mut it = v.into_iter();
+        for i in 0..bucket_cnt {
+            let len = n * (i + 1) / bucket_cnt - n * i / bucket_cnt;
+            buckets.push(it.by_ref().take(len).collect::<Vec<T>>());
+        }
+        buckets.retain(|b| !b.is_empty());
+        Self { buckets, size: n }
+    }
+
+    fn len(&self) -> usize {
+        self.size
+    }
+
+    fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
+    /// x が入るべきバケット番号（末尾が x 以上である最初のバケット。無ければ最後のバケット）
+    /// 空でないときだけ呼ぶこと
+    fn bucket_index(&self, x: &T) -> usize {
+        for (i, b) in self.buckets.iter().enumerate() {
+            if x <= b.last().unwrap() {
+                return i;
+            }
+        }
+        self.buckets.len() - 1
+    }
+
+    /// k番目(0-indexed)の要素が (何番目のバケットの, 何番目) にあるか
+    fn locate(&self, mut k: usize) -> Option<(usize, usize)> {
+        if k >= self.size {
+            return None;
+        }
+        for (bi, b) in self.buckets.iter().enumerate() {
+            if k < b.len() {
+                return Some((bi, k));
+            }
+            k -= b.len();
+        }
+        unreachable!()
+    }
+
+    /// x を追加する
+    fn insert(&mut self, x: T) {
+        if self.size == 0 {
+            self.buckets = vec![vec![x]];
+            self.size = 1;
+            return;
+        }
+        let bi = self.bucket_index(&x);
+        let bucket_cnt = self.buckets.len();
+        let b = &mut self.buckets[bi];
+        let pos = b.partition_point(|y| y <= &x);
+        b.insert(pos, x);
+        self.size += 1;
+        // バケットが大きくなりすぎたら半分に割る
+        if b.len() > bucket_cnt * Self::SPLIT_RATIO {
+            let right = b.split_off(b.len() / 2);
+            self.buckets.insert(bi + 1, right);
+        }
+    }
+
+    /// x を1つ削除する。x が無ければ何もせず false を返す
+    fn remove(&mut self, x: &T) -> bool {
+        if self.size == 0 {
+            return false;
+        }
+        let bi = self.bucket_index(x);
+        let b = &mut self.buckets[bi];
+        let pos = b.partition_point(|y| y < x);
+        if pos == b.len() || &b[pos] != x {
+            return false;
+        }
+        b.remove(pos);
+        self.size -= 1;
+        if b.is_empty() {
+            self.buckets.remove(bi);
+        }
+        true
+    }
+
+    /// k番目(0-indexed)に小さい値
+    fn get(&self, k: usize) -> Option<&T> {
+        self.locate(k).map(|(bi, i)| &self.buckets[bi][i])
+    }
+
+    /// k番目(0-indexed)に小さい値を削除して返す
+    fn pop(&mut self, k: usize) -> Option<T> {
+        let (bi, i) = self.locate(k)?;
+        let v = self.buckets[bi].remove(i);
+        self.size -= 1;
+        if self.buckets[bi].is_empty() {
+            self.buckets.remove(bi);
+        }
+        Some(v)
+    }
+
+    fn min(&self) -> Option<&T> {
+        self.buckets.first().map(|b| &b[0])
+    }
+
+    fn max(&self) -> Option<&T> {
+        self.buckets.last().map(|b| b.last().unwrap())
+    }
+
+    /// x 未満の要素数
+    fn index(&self, x: &T) -> usize {
+        let mut ans = 0;
+        for b in &self.buckets {
+            if b.last().unwrap() >= x {
+                return ans + b.partition_point(|y| y < x);
+            }
+            ans += b.len();
+        }
+        ans
+    }
+
+    /// x 以下の要素数
+    fn index_right(&self, x: &T) -> usize {
+        let mut ans = 0;
+        for b in &self.buckets {
+            if b.last().unwrap() > x {
+                return ans + b.partition_point(|y| y <= x);
+            }
+            ans += b.len();
+        }
+        ans
+    }
+
+    fn count(&self, x: &T) -> usize {
+        self.index_right(x) - self.index(x)
+    }
+
+    fn contains(&self, x: &T) -> bool {
+        if self.size == 0 {
+            return false;
+        }
+        let b = &self.buckets[self.bucket_index(x)];
+        b.binary_search(x).is_ok()
+    }
+
+    /// x 未満の最大値
+    fn lt(&self, x: &T) -> Option<&T> {
+        for b in self.buckets.iter().rev() {
+            if &b[0] < x {
+                return Some(&b[b.partition_point(|y| y < x) - 1]);
+            }
+        }
+        None
+    }
+
+    /// x 以下の最大値
+    fn le(&self, x: &T) -> Option<&T> {
+        for b in self.buckets.iter().rev() {
+            if &b[0] <= x {
+                return Some(&b[b.partition_point(|y| y <= x) - 1]);
+            }
+        }
+        None
+    }
+
+    /// x より大きい最小値
+    fn gt(&self, x: &T) -> Option<&T> {
+        for b in &self.buckets {
+            if b.last().unwrap() > x {
+                return Some(&b[b.partition_point(|y| y <= x)]);
+            }
+        }
+        None
+    }
+
+    /// x 以上の最小値
+    fn ge(&self, x: &T) -> Option<&T> {
+        for b in &self.buckets {
+            if b.last().unwrap() >= x {
+                return Some(&b[b.partition_point(|y| y < x)]);
+            }
+        }
+        None
+    }
+
+    /// 昇順に列挙する
+    fn iter(&self) -> impl Iterator<Item = &T> + '_ {
+        self.buckets.iter().flatten()
     }
 }
 
