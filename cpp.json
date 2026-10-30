@@ -1,0 +1,593 @@
+// v2.4.2 3/17更新
+{
+	"cout": {
+		"prefix": "co",
+		"body": [
+			"cout << $1 << \"\\n\";"
+		],
+		"description": "出力"
+	},
+	"cin": {
+		"prefix": "ci",
+		"body": [
+			"cin >> $1;"
+		],
+		"description": "入力"
+	},
+	"while": {
+		"prefix": "while",
+		"body": [
+			"while (${1:expression}) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "while文"
+	},
+	"all": {
+		"prefix": "all",
+		"body": [
+			"$1.begin(), $1.end()"
+		],
+		"description": "vectorの最初から最後まで"
+	},
+	"rall": {
+		"prefix": "rall",
+		"body": [
+			"$1.rbegin(), $1.rend()"
+		],
+		"description": "vectorの最後から最初まで"
+	},
+	"rep": {
+		"prefix": "rep",
+		"body": [
+			"for (ll i = 0; i < ${1:n}; i++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for i=0;i<n;"
+	},
+	"rep_test_and_query": {
+		"prefix": "rept",
+		"body": [
+			"for (ll test = 0; test < ${1:T}; test++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for test=0;test<T;"
+	},
+	"rep_j": {
+		"prefix": "repj",
+		"body": [
+			"for (ll j = 0; j < ${1:n}; j++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for j=0;j<n;"
+	},
+	"rep_k": {
+		"prefix": "repk",
+		"body": [
+			"for (ll k = 0; k < ${1:n}; k++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for k=0;k<n;"
+	},
+	"rep_e": {
+		"prefix": "rep=",
+		"body": [
+			"for (ll i = 0; i <= ${1:n}; i++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for i=0;i<=n;"
+	},
+	"rep_je": {
+		"prefix": "repj=",
+		"body": [
+			"for (ll j = 0; j <= ${1:n}; j++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for j=0;j<=n;"
+	},
+	"rep_ke": {
+		"prefix": "repk=",
+		"body": [
+			"for (ll k = 0; k <= ${1:n}; k++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for k=0;j<=n;"
+	},
+	"rep_m_n": {
+		"prefix": "repmn",
+		"body": [
+			"for (ll i = ${1:m}; i < ${2:n}; i++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for i=m;i<n;"
+	},
+	"rep_m_ne": {
+		"prefix": "repmne",
+		"body": [
+			"for (ll i = ${1:m}; i <= ${2:n}; i++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for i=m;i<=n;"
+	},
+	"rep_s": {
+		"prefix": "reps",
+		"body": [
+			"for (ll i = 1; i <= ${1:n}; i++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for i=0;i<=n;"
+	},
+	"rep_sj": {
+		"prefix": "repsj",
+		"body": [
+			"for (ll j = 1; j <= ${1:n}; j++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for j=0;j<=n;"
+	},
+	"rep_sk": {
+		"prefix": "repsk",
+		"body": [
+			"for (ll k = 1; k <= ${1:n}; k++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for k=0;k<=n;"
+	},
+	"rrep": {
+		"prefix": "rrep",
+		"body": [
+			"for (ll i = ${1:n} - 1; i >= ${2:m}; i--) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": ""
+	},
+	"rep_auto": {
+		"prefix": "repauto",
+		"body": [
+			"for (auto c : ${1:n}) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for_auto"
+	},
+	"rep_bit": {
+		"prefix": "repbit",
+		"body": [
+			"for (ll bit = 0; bit < (1LL << ${1:n}); bit++) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "for_bit"
+	},
+	"template": {
+		"prefix": "#i",
+		"body": [
+			"#include <bits/stdc++.h>",
+			"using namespace std;",
+			"using ll = long long;",
+			"",
+			"int main() {",
+			"\tios::sync_with_stdio(false);",
+			"\tcin.tie(nullptr);",
+			"",
+			"\t${0:}",
+			"\t",
+			"\treturn 0;",
+			"}"
+		],
+		"description": "高速入出力付きテンプレート"
+	},
+	"ld": {
+		"prefix": "ld",
+		"body": [
+			"long double ${0:}"
+		],
+		"description": "long double"
+	},
+	"P": {
+		"prefix": "P",
+		"body": [
+			"pair<ll, ll>"
+		],
+		"description": "pair<ll, ll>"
+	},
+	"pq": {
+		"prefix": "pq",
+		"body": [
+			"priority_queue<${1:}> ${0:};"
+		],
+		"description": "priority_queue"
+	},
+	"pq_g": {
+		"prefix": "pqg",
+		"body": [
+			"priority_queue<${1:}, vector<${1:}>, greater<${1:}>> ${0:};"
+		],
+		"description": "priority_queue greater"
+	},
+	"vc": {
+		"prefix": "vc",
+		"body": [
+			"vector<${1:}> ${0:}"
+		],
+		"description": "vector"
+	},
+	"vv": {
+		"prefix": "vv",
+		"body": [
+			"vector<vector<${1:}>> ${0:}"
+		],
+		"description": "vector<vector>"
+	},
+	"vl": {
+		"prefix": "vl",
+		"body": [
+			"vector<ll> ${0:}"
+		],
+		"description": "vector_ll"
+	},
+	"vvl": {
+		"prefix": "vvl",
+		"body": [
+			"vector<vector<ll>> ${0:}"
+		],
+		"description": "vector_ll2"
+	},
+	"vvvl": {
+		"prefix": "vvvl",
+		"body": [
+			"vector<vector<vector<ll>>> ${0:}"
+		],
+		"description": "vector_ll3"
+	},
+	"vvvvl": {
+		"prefix": "vvvvl",
+		"body": [
+			"vector<vector<vector<vector<ll>>>> ${0:}"
+		],
+		"description": "vector_ll4"
+	},
+	"vs": {
+		"prefix": "vs",
+		"body": [
+			"vector<string> ${0:}"
+		],
+		"description": "vector_str"
+	},
+	"vvs": {
+		"prefix": "vvs",
+		"body": [
+			"vector<vector<string>> ${0:}"
+		],
+		"description": "vector_str2"
+	},
+	"vp": {
+		"prefix": "vp",
+		"body": [
+			"vector<pair<ll, ll>> ${0:}"
+		],
+		"description": "vector<pair<ll, ll>>"
+	},
+	"vld": {
+		"prefix": "vld",
+		"body": [
+			"vector<long double> ${0:}"
+		],
+		"description": "vector_ld"
+	},
+	"vvld": {
+		"prefix": "vvld",
+		"body": [
+			"vector<vector<long double>> ${0:}"
+		],
+		"description": "vector_ld2"
+	},
+	"vvvld": {
+		"prefix": "vvvld",
+		"body": [
+			"vector<vector<vector<long double>>> ${0:}"
+		],
+		"description": "vector_ld3"
+	},
+	"chmax": {
+		"prefix": "chmax",
+		"body": [
+			"template<class T> inline bool chmax(T &a, const T &b) { if (a < b) { a = b; return 1; } return 0; }"
+		],
+		"description": "最大値を更新してboolを返す"
+	},
+	"chmin": {
+		"prefix": "chmin",
+		"body": [
+			"template<class T> inline bool chmin(T &a, const T &b) { if (a > b) { a = b; return 1; } return 0; }"
+		],
+		"description": "最小値を更新してboolを返す"
+	},
+	"pb": {
+		"prefix": "push",
+		"body": [
+			"push_back(${0:});"
+		],
+		"description": "push_back"
+	},
+	"eb": {
+		"prefix": "eb",
+		"body": [
+			"emplace_back(${0:});"
+		],
+		"description": "emplace_back"
+	},
+	"em": {
+		"prefix": "em",
+		"body": [
+			"emplace(${0:});"
+		],
+		"description": "emplace"
+	},
+	"pob": {
+		"prefix": "pob",
+		"body": [
+			"pop_back(${0:});"
+		],
+		"description": "pop_back"
+	},
+	"YES": {
+		"prefix": "YES",
+		"body": [
+			"cout << \"YES\" << \"\\n\";"
+		],
+		"description": "YES"
+	},
+	"NO": {
+		"prefix": "NO",
+		"body": [
+			"cout << \"NO\" << \"\\n\";"
+		],
+		"description": "NO"
+	},
+	"Yes": {
+		"prefix": "Yes",
+		"body": [
+			"cout << \"Yes\" << \"\\n\";"
+		],
+		"description": "Yes"
+	},
+	"No": {
+		"prefix": "No",
+		"body": [
+			"cout << \"No\" << \"\\n\";"
+		],
+		"description": "No"
+	},
+	"Yes_No": {
+		"prefix": "YN",
+		"body": [
+			"if (${1:flg}) cout << \"Yes\" << \"\\n\";",
+			"else cout << \"No\" << \"\\n\";"
+		],
+		"description": "Yes_No"
+	},
+	"dame": {
+		"prefix": "dame",
+		"body": [
+			"cout << -1 << \"\\n\";"
+		],
+		"description": "cout-1"
+	},
+	"dx_dy": {
+		"prefix": "dx_dy",
+		"body": [
+			"ll dx[]={-1,0,1,0,1,1,-1,-1};",
+			"ll dy[]={0,1,0,-1,1,-1,1,-1};"
+		],
+		"description": "dx_dy"
+	},
+	"grid_out": {
+		"prefix": "out_grid",
+		"body": [
+			"if (${1:i} < 0 || ${1:i} >= ${2:H} || ${3:j} < 0 || ${3:j} >= ${4:W}) {",
+			"\t${0:}",
+			"}"
+		],
+		"description": "grid_flg"
+	},
+	"dist_sq": {
+		"prefix": "yu",
+		"body": [
+			"(${1:a1} - ${2:b1}) * (${1:a1} - ${2:b1}) + (${3:a2} - ${4:b2}) * (${3:a2} - ${4:b2})"
+		],
+		"description": "ユークリッド距離"
+	},
+	"mannhattan": {
+		"prefix": "ma",
+		"body": [
+			"abs(${1:x1} - ${2:x2}) + abs(${3:y1} - ${4:y2})"
+		],
+		"description": "マンハッタン距離"
+	},
+	"nC2": {
+		"prefix": "nc2",
+		"body": [
+			"${1:x} * (${1:x} - 1) / 2"
+		],
+		"description": "nC2"
+	},
+	"nC3": {
+		"prefix": "nc3",
+		"body": [
+			"${1:x} * (${1:x} - 1) * (${1:x} -2) / 6"
+		],
+		"description": "nC3"
+	},
+	"0.111111111": {
+		"prefix": "pre_co",
+		"body": [
+			"cout << fixed << setprecision(15) << ${1:x} << \"\\n\";"
+		],
+		"description": "cout_0.11111111111111"
+	},
+	"vector1_cout": {
+		"prefix": "vcc",
+		"body": [
+			"ll N = ${1:x}.size();",
+			"for (ll i = 0; i < N; i++) {",
+			"\tcout << (i == 0 ? \"\" : \" \") << ${1:x}[i];",
+			"}"
+		],
+		"description": "vector1_cout"
+	},
+	"vector2_cout": {
+		"prefix": "vc2c",
+		"body": [
+			"for (ll i = 0; i < ${1:x}.size(); i++) {",
+			"\tfor (ll j = 0; j < ${1:x}[i].size(); j++) {",
+			"\t\tcout << ${1:x}[i][j] << (j == ${1:x}[i].size() - 1 ? \"\" : \" \");",
+			"\t}",
+			"\tcout << \"\\n\";",
+			"}"
+		],
+		"description": "vector2_cout"
+	},
+	"run_length_encoding": {
+		"prefix": "rle",
+		"body": [
+			"vector<pair<${1:char}, ll>> ${2:res};",
+			"ll ${3:s}_size = ${3:s}.size();",
+			"for (ll i = 0; i < ${3:s}_size;) {",
+			"\tll j = i;",
+			"\twhile (j < ${3:s}_size && ${3:s}[i] == ${3:s}[j]) j++;",
+			"\t${2:res}.push_back({${3:s}[i], j - i});",
+			"\ti = j;",
+			"}"
+		],
+		"description": "ランレングス圧縮"
+	},
+	"string_find": {
+		"prefix": "find",
+		"body": [
+			"${1:s1}.find(${2:s2}) != string::npos"
+		],
+		"description": "s1.find(s2)"
+	},
+	"toll_sinsu": {
+		"prefix": "to10",
+		"body": [
+			"ll toll_sinsu(string s, ll n) {",
+			"\tll res = 0;",
+			"\tfor (char c : s) {",
+			"\t\tres = res * n + (c - '0');",
+			"\t}",
+			"\treturn res;",
+			"}"
+		],
+		"description": "n進数の文字列を10進数(ll)に変換"
+	},
+	"ton_sinsu": {
+		"prefix": "ton",
+		"body": [
+			"string ton_sinsu(ll n, ll m) {",
+			"\tif (n == 0) return \"0\";",
+			"\tstring res = \"\";",
+			"\twhile (n > 0) {",
+			"\t\tres += to_string(n % m);",
+			"\t\tn /= m;",
+			"\t}",
+			"\treverse(res.begin(), res.end());",
+			"\treturn res;",
+			"}"
+		],
+		"description": "10進数をm進数の文字列に変換"
+	},
+	"nCr": {
+		"prefix": "ncr",
+		"body": [
+			"ll nCr(ll n, ll r) {",
+			"\tif (r < 0 || r > n) return 0;",
+			"\tif (r > n / 2) r = n - r;",
+			"\t__int128_t res = 1;",
+			"\tfor (ll i = 1; i <= r; i++) {",
+			"\t\tres = res * (n - i + 1) / i;",
+			"\t}",
+			"\treturn (ll)res;",
+			"}"
+		],
+		"description": "combination"
+	},
+	"gcd": {
+		"prefix": "gcd",
+		"body": [
+			"template <typename T> T gcd(T a, T b) {a=abs(a);b=abs(b);if (b == 0)return a; else return gcd(b, a % b);}"
+		],
+		"description": "ユークリッドの互除法を用いた最大公約数判定"
+	},
+	"lcm": {
+		"prefix": "lcm",
+		"body": [
+			"template <typename T> inline T lcm(T a, T b) {return (a * b) / gcd(a, b);}"
+		],
+		"description": "最小公倍数判定（gcdも必要）"
+	},
+	"ceil": {
+		"prefix": "ceil",
+		"body": [
+			"template <typename T> inline T ceil(T a, T b) { return (a + b - 1) / b; }"
+		],
+		"description": "切り上げ"
+	},
+	"floor": {
+		"prefix": "floor",
+		"body": [
+			"template <typename T> inline T floor(T a,T b) {return a/b;}"
+		],
+		"description": "切り捨て"
+	},
+	"pi": {
+		"prefix": "pi",
+		"body": [
+			"3.1415926535"
+		],
+		"description": "円周率"
+	},
+	"abc": {
+		"prefix": "abc",
+		"body": [
+			"\"abcdefghijklmnopqrstuvwxyz\""
+		],
+		"description": "abcd"
+	},
+	"ABC": {
+		"prefix": "ABC",
+		"body": [
+			"\"ABCDEFGHIJKLMNOPQRSTUVWXYZ\""
+		],
+		"description": "ABCD"
+	},
+	"ifkaibun": {
+		"prefix": "ifkaibun",
+		"body": [
+			"bool if_kaibun(const string& s) {",
+			"\tll n = s.size();",
+			"\tfor (ll i = 0; i < n; / 2; i++) {",
+			"\t\tif (s[i] != s[n - 1 - i]) {",
+			"\t\t\treturn false;",
+			"\t\t}",
+			"\t}",
+			"\treturn true;",
+			"}",
+		],
+		"description": "回文判定"
+	}
+}
