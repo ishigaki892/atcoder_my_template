@@ -49,8 +49,10 @@ const LOWER_ABC: &str = "abcdefghijklmnopqrstuvwxyz";
 /// ```
 macro_rules! chmin {
     ($a:expr, $b:expr) => {{
-        if $a > $b {
-            $a = $b;
+        // $b を1回だけ評価する（chmin!(x, dfs(v)) で dfs が2回走らないように）
+        let b = $b;
+        if $a > b {
+            $a = b;
             true
         } else {
             false
@@ -69,8 +71,9 @@ macro_rules! chmin {
 /// ```
 macro_rules! chmax {
     ($a:expr, $b:expr) => {{
-        if $a < $b {
-            $a = $b;
+        let b = $b;
+        if $a < b {
+            $a = b;
             true
         } else {
             false
@@ -133,7 +136,6 @@ fn solve() {
 }
 
 fn main() {
-    input! {}
     solve();
     // 深い再帰DFSでスタックが足りない場合は上の行の代わりにこちらを使う
     // std::thread::Builder::new().stack_size(1 << 28).spawn(solve).unwrap().join().unwrap();
@@ -190,11 +192,13 @@ fn lcm(a: u64, b: u64) -> u64 {
 /// ```
 /// assert_eq!(combination(5, 2, MOD), 10); // 5C2
 /// assert_eq!(combination(2, 5, MOD), 0); // r > n なら 0
+/// assert_eq!(combination(1_000_000_000, 999_999_998, MOD), combination(1_000_000_000, 2, MOD)); // r が大きくても O(n-r)
 /// ```
 fn combination(n: u64, r: u64, md: u64) -> u64 {
     if r > n {
         return 0;
     }
+    let r = r.min(n - r); // nCr = nC(n-r) で O(min(r, n-r)) にする
     let mut num = 1u64;
     let mut den = 1u64;
     for i in 0..r {
@@ -683,8 +687,9 @@ fn pollard_rho(n: u64) -> Vec<u64> {
 /// assert_eq!(floor_sum(4, 3, 2, 1), 4);
 /// ```
 fn floor_sum(n: i64, m: i64, a: i64, b: i64) -> i64 {
-    let mut ans: i64 = 0;
-    let (mut n, mut m, mut a, mut b) = (n, m, a, b);
+    // 途中計算 (n*(n-1)/2*(a/m) や a*n+b) が i64 を超えうるので内部は i128 で計算する
+    let mut ans: i128 = 0;
+    let (mut n, mut m, mut a, mut b) = (n as i128, m as i128, a as i128, b as i128);
     if a < 0 {
         let a2 = a.rem_euclid(m);
         ans -= n * (n - 1) / 2 * ((a2 - a) / m);
@@ -712,7 +717,7 @@ fn floor_sum(n: i64, m: i64, a: i64, b: i64) -> i64 {
         b = y_max % m;
         std::mem::swap(&mut m, &mut a);
     }
-    ans
+    ans as i64
 }
 
 /// 中国剰余定理 (CRT)
@@ -733,10 +738,11 @@ fn crt(r1: i64, m1: i64, r2: i64, m2: i64) -> Option<(i64, i64)> {
     }
     let lcm = m1 / g * m2;
     // x = r1 + m1 * ((r2 - r1) / g * p mod (m2 / g))
-    let tmp = (r2 - r1) / g % (m2 / g) * p % (m2 / g);
-    let mut x = r1 + m1 * tmp;
-    x = x.rem_euclid(lcm);
-    Some((x, lcm))
+    // lcm が i64 に収まっても途中の積は溢れうるので i128 で計算する
+    let m2_g = (m2 / g) as i128;
+    let tmp = ((r2 - r1) / g) as i128 % m2_g * (p as i128) % m2_g;
+    let x = (r1 as i128 + m1 as i128 * tmp).rem_euclid(lcm as i128);
+    Some((x as i64, lcm))
 }
 
 /// 複数の合同式 x ≡ rs[i] (mod ms[i]) をまとめて解く CRT
@@ -894,7 +900,7 @@ fn zaatu(v: &Vec<usize>) -> Vec<usize> {
 /// ```
 fn binary_search<F: Fn(isize) -> bool>(mut ok: isize, mut ng: isize, f: F) -> isize {
     while (ok - ng).abs() > 1 {
-        let mid = (ok + ng) / 2;
+        let mid = ok + (ng - ok) / 2; // (ok + ng) / 2 だと端の値でオーバーフローしうる
         if f(mid) {
             ok = mid;
         } else {
@@ -999,6 +1005,9 @@ fn find_first_ge(seg: &Segtree<Max<i64>>, l: usize, r: usize, a: i64) -> Option<
 /// ```
 fn z_algorithm(s: &[char]) -> Vec<usize> {
     let n = s.len();
+    if n == 0 {
+        return vec![];
+    }
     let mut z = vec![0; n];
     z[0] = n;
     let (mut l, mut r) = (0, 0);
@@ -1244,8 +1253,13 @@ impl Trie {
 struct AhoCorasick {
     children: Vec<[i32; 26]>,
     fail: Vec<usize>,
-    // このノードで終了するパターンのindex一覧（build後はfail先の分も含む）
+    // このノード「自身」で終了するパターンのindex一覧（fail先の分はコピーしない）
     outputs: Vec<Vec<usize>>,
+    // fail を辿って最初に出会う「outputs が空でないノード」（無ければ usize::MAX）
+    // search はこれを辿って列挙するので、"a","aa","aaa",... でもメモリは O(総文字数)
+    out_link: Vec<usize>,
+    // このノードに到達したときに一致するパターンの総数（fail先の分も含む）
+    match_cnt: Vec<i64>,
     pattern_cnt: usize,
 }
 
@@ -1255,6 +1269,8 @@ impl AhoCorasick {
             children: vec![[-1; 26]],
             fail: vec![0],
             outputs: vec![vec![]],
+            out_link: vec![usize::MAX],
+            match_cnt: vec![0],
             pattern_cnt: 0,
         }
     }
@@ -1268,6 +1284,8 @@ impl AhoCorasick {
                 self.children.push([-1; 26]);
                 self.fail.push(0);
                 self.outputs.push(vec![]);
+                self.out_link.push(usize::MAX);
+                self.match_cnt.push(0);
                 self.children[cur][idx] = (self.children.len() - 1) as i32;
             }
             cur = self.children[cur][idx] as usize;
@@ -1275,6 +1293,7 @@ impl AhoCorasick {
         let pat_id = self.pattern_cnt;
         self.pattern_cnt += 1;
         self.outputs[cur].push(pat_id);
+        self.match_cnt[cur] += 1;
         pat_id
     }
 
@@ -1291,8 +1310,13 @@ impl AhoCorasick {
         }
         while let Some(v) = que.pop_front() {
             let fv = self.fail[v];
-            let out_fv = self.outputs[fv].clone();
-            self.outputs[v].extend(out_fv);
+            // fail 先の情報は「個数」と「リンク」だけ伝播させる（O(1)）
+            self.match_cnt[v] += self.match_cnt[fv];
+            self.out_link[v] = if !self.outputs[fv].is_empty() {
+                fv
+            } else {
+                self.out_link[fv]
+            };
             for c in 0..26 {
                 let nv = self.children[v][c];
                 if nv == -1 {
@@ -1313,8 +1337,17 @@ impl AhoCorasick {
         for (i, &c) in text.iter().enumerate() {
             let idx = (c - b'a') as usize;
             cur = self.children[cur][idx] as usize;
-            for &p in &self.outputs[cur] {
-                res.push((i, p));
+            // 自身 → out_link → out_link ... と辿る（O(text + 一致数)）
+            let mut v = if !self.outputs[cur].is_empty() {
+                cur
+            } else {
+                self.out_link[cur]
+            };
+            while v != usize::MAX {
+                for &p in &self.outputs[v] {
+                    res.push((i, p));
+                }
+                v = self.out_link[v];
             }
         }
         res
@@ -1327,7 +1360,7 @@ impl AhoCorasick {
         for &c in text {
             let idx = (c - b'a') as usize;
             cur = self.children[cur][idx] as usize;
-            total += self.outputs[cur].len() as i64;
+            total += self.match_cnt[cur];
         }
         total
     }
@@ -1419,15 +1452,15 @@ fn lcp_array(s: &[u8], sa: &[usize]) -> Vec<usize> {
 
 /// Double Rolling Hash（衝突確率を大幅に下げた二重ハッシュ）
 /// (h1, h2) のペアで一致判定することでハッシュ衝突をほぼ無視できる
-/// 基数は実行ごとにランダム。2つの文字列を比較するときは with_base で同じ基数を使うこと
+/// 基数は実行ごとにランダムだが、1回の実行中は共通（hash_seed）なので new 同士をそのまま比較してよい
 ///
 /// ## 使用例
 /// ```
 /// let h = DoubleRollingHash::new(b"abcabc");
 /// assert_eq!(h.get(0, 3), h.get(3, 6)); // "abc" == "abc"
 /// assert_ne!(h.get(0, 2), h.get(1, 3)); // "ab" != "bc"
-/// // 別の文字列と比べるときは同じ基数で作る
-/// let t = DoubleRollingHash::with_base(b"xabc", h.bases);
+/// // 別の文字列とも new 同士でそのまま比較できる
+/// let t = DoubleRollingHash::new(b"xabc");
 /// assert_eq!(h.get(0, 3), t.get(1, 4));
 /// ```
 struct DoubleRollingHash {
@@ -1443,7 +1476,7 @@ impl DoubleRollingHash {
     const MOD2: u64 = 998_244_353;
 
     fn new(s: &[u8]) -> Self {
-        let r = random_u64();
+        let r = hash_seed();
         let bases = (
             (r & 0xFFFF_FFFF) % (Self::MOD1 - 1000) + 500,
             (r >> 32) % (Self::MOD2 - 1000) + 500,
@@ -1947,7 +1980,13 @@ impl MapMonoid for RangeAddRangeMin {
         0
     }
     fn mapping(f: &Self::F, x: &<Self::M as Monoid>::S) -> <Self::M as Monoid>::S {
-        f + x
+        // 単位元 i64::MAX のノード（範囲外の葉など）にも mapping が呼ばれるので、
+        // 単位元は単位元のまま保ち、それ以外も飽和加算でオーバーフローを防ぐ
+        if *x == i64::MAX {
+            *x
+        } else {
+            x.saturating_add(*f)
+        }
     }
     fn composition(f: &Self::F, g: &Self::F) -> Self::F {
         f + g
@@ -2029,7 +2068,12 @@ impl MapMonoid for RangeAddRangeMax {
         0
     }
     fn mapping(f: &Self::F, x: &<Self::M as Monoid>::S) -> <Self::M as Monoid>::S {
-        f + x
+        // 単位元 i64::MIN はそのまま保つ（MIN + f でオーバーフロー/値の破壊が起きないように）
+        if *x == i64::MIN {
+            *x
+        } else {
+            x.saturating_add(*f)
+        }
     }
     fn composition(f: &Self::F, g: &Self::F) -> Self::F {
         f + g
@@ -2662,11 +2706,23 @@ fn random_u64() -> u64 {
     h.finish()
 }
 
+/// ハッシュの基数用の乱数。1回の実行中は何度呼んでも同じ値を返す（実行ごとには変わる）
+/// RollingHash::new / DoubleRollingHash::new を複数回呼んでも基数が揃い、そのまま比較できる
+///
+/// ## 使用例
+/// ```
+/// assert_eq!(hash_seed(), hash_seed());
+/// ```
+fn hash_seed() -> u64 {
+    static SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *SEED.get_or_init(random_u64)
+}
+
 /// Rolling Hash（mod 2^61-1, 基数は実行ごとにランダム）
 /// 単一mod 1e9 程度だと 10^5 個の比較で普通に衝突するため、2^61-1 を使う
 /// let rh = RollingHash::new(s.as_bytes());
 /// rh.get_hash(l, r) // s[l..r) のハッシュ
-/// 2つの文字列を比較するときは RollingHash::with_base(t, rh.base) で同じ基数を使うこと
+/// 基数は1回の実行中は共通（hash_seed）なので、new を複数回呼んだもの同士をそのまま比較してよい
 ///
 /// ## 使用例
 /// ```
@@ -2674,8 +2730,8 @@ fn random_u64() -> u64 {
 /// let rh = RollingHash::new(s.as_bytes());
 /// assert_eq!(rh.get_hash(0, 3), rh.get_hash(3, 6));
 /// assert_ne!(rh.get_hash(0, 3), rh.get_hash(1, 4));
-/// // 別の文字列と比べるときは同じ基数で作る
-/// let t = RollingHash::with_base(b"bca", rh.base);
+/// // 別の文字列とも new 同士でそのまま比較できる（基数は実行中共通）
+/// let t = RollingHash::new(b"bca");
 /// assert_eq!(t.get_hash(0, 3), rh.get_hash(1, 4));
 /// ```
 struct RollingHash {
@@ -2698,7 +2754,7 @@ impl RollingHash {
     }
 
     fn new(s: &[u8]) -> Self {
-        let base = random_u64() % (Self::MOD - 1000) + 500;
+        let base = hash_seed() % (Self::MOD - 1000) + 500;
         Self::with_base(s, base)
     }
 
@@ -3311,8 +3367,11 @@ fn warshall(graph: &[Vec<(usize, i64)>]) -> Vec<Vec<i64>> {
 
 /// ベルマンフォード法による頂点sから各頂点への最小コスト（負のコストも可）
 /// ## 出力
-/// * `vec[i]` - 頂点sから頂点iへの最小コスト（到達不可能なら`i64::MAX`）
-/// * `bool` - 負閉路が存在するなら`true`
+/// * `vec[i]` - 頂点sから頂点iへの最小コスト
+///   - 到達不可能なら`i64::MAX`
+///   - s から到達可能な負閉路を経由して i に行ける（いくらでも小さくできる）なら`i64::MIN`
+/// * `bool` - s から到達可能な負閉路が存在するなら`true`
+/// 「終点 t までの最短路が -∞ か？」は `dist[t] == i64::MIN` で判定する
 /// ### 計算量 O(NM)
 ///
 /// ## 使用例
@@ -3324,12 +3383,17 @@ fn warshall(graph: &[Vec<(usize, i64)>]) -> Vec<Vec<i64>> {
 /// assert_eq!(bellman(&g, 0), (vec![0, 2, 1], false));
 /// let neg = vec![vec![(1, 1i64)], vec![(0, -2i64)]]; // 0 → 1 → 0 の負閉路
 /// assert!(bellman(&neg, 0).1);
+/// // 0 → 1 ⇄ 2（負閉路）→ 3、および 0 → 4 は負閉路と無関係
+/// let g2 = vec![vec![(1, 1i64), (4, 5)], vec![(2, -3)], vec![(1, 1), (3, 0)], vec![], vec![]];
+/// let (d, neg) = bellman(&g2, 0);
+/// assert!(neg);
+/// assert_eq!(d, vec![0, i64::MIN, i64::MIN, i64::MIN, 5]);
 /// ```
 fn bellman(graph: &[Vec<(usize, i64)>], s: usize) -> (Vec<i64>, bool) {
     let n = graph.len();
     let mut dist = vec![i64::MAX; n];
     dist[s] = 0;
-    for _ in 0..n - 1 {
+    for _ in 0..n.saturating_sub(1) {
         for v in 0..n {
             if dist[v] == i64::MAX {
                 continue;
@@ -3341,14 +3405,21 @@ fn bellman(graph: &[Vec<(usize, i64)>], s: usize) -> (Vec<i64>, bool) {
             }
         }
     }
+    // さらに n 回回し、まだ更新される頂点（とそこから到達できる頂点）を -∞ (i64::MIN) にする
     let mut has_negative_cycle = false;
-    for v in 0..n {
-        if dist[v] == i64::MAX {
-            continue;
-        }
-        for &(next_v, cost) in &graph[v] {
-            if dist[v] + cost < dist[next_v] {
-                has_negative_cycle = true;
+    for _ in 0..n {
+        for v in 0..n {
+            if dist[v] == i64::MAX {
+                continue;
+            }
+            for &(next_v, cost) in &graph[v] {
+                if dist[next_v] == i64::MIN {
+                    continue;
+                }
+                if dist[v] == i64::MIN || dist[v] + cost < dist[next_v] {
+                    dist[next_v] = i64::MIN;
+                    has_negative_cycle = true;
+                }
             }
         }
     }
@@ -4174,8 +4245,9 @@ impl LiChaoTree {
         }
     }
 
-    fn eval(a: i64, b: i64, x: i64) -> i64 {
-        a * x + b
+    // a*x+b は i64 を超えうるので i128 で計算する（比較も i128 のまま行う）
+    fn eval(a: i64, b: i64, x: i64) -> i128 {
+        a as i128 * x as i128 + b as i128
     }
 
     fn add_line_rec(&mut self, node: usize, l: usize, r: usize, mut a: i64, mut b: i64) {
@@ -4217,7 +4289,7 @@ impl LiChaoTree {
         let mut node = 0usize;
         let mut l = 0usize;
         let mut r = self.n;
-        let mut res = self.inf;
+        let mut res = self.inf as i128;
         loop {
             let (a, b) = self.line[node];
             res = res.min(Self::eval(a, b, x));
@@ -4233,7 +4305,7 @@ impl LiChaoTree {
                 l = mid;
             }
         }
-        res
+        res.clamp(i64::MIN as i128, i64::MAX as i128) as i64
     }
 
     /// 実際のx座標を指定してクエリする（構築時に渡した xs の中の値であること。無ければ panic）
@@ -4433,7 +4505,8 @@ impl WaveletMatrix {
 
     /// [l, r) の中で値が [lower, upper) に入る要素数
     fn range_freq(&self, l: usize, r: usize, lower: u64, upper: u64) -> usize {
-        self.range_freq_rec(0, l, r, lower, upper, 0, 1u64 << self.bit_len)
+        // bit_len == 64 でも 1 << bit_len が溢れないよう値域は u128 で扱う
+        self.range_freq_rec(0, l, r, lower as u128, upper as u128, 0, 1u128 << self.bit_len)
     }
 
     fn range_freq_rec(
@@ -4441,10 +4514,10 @@ impl WaveletMatrix {
         level: usize,
         l: usize,
         r: usize,
-        lower: u64,
-        upper: u64,
-        cur_l: u64,
-        cur_r: u64,
+        lower: u128,
+        upper: u128,
+        cur_l: u128,
+        cur_r: u128,
     ) -> usize {
         if r <= l || upper <= cur_l || cur_r <= lower {
             return 0;
@@ -4460,7 +4533,7 @@ impl WaveletMatrix {
         let r0 = bv.rank0(r);
         let l1 = self.mid[level] + bv.rank1(l);
         let r1 = self.mid[level] + bv.rank1(r);
-        let mid_val = (cur_l + cur_r) / 2;
+        let mid_val = cur_l + (cur_r - cur_l) / 2;
         self.range_freq_rec(level + 1, l0, r0, lower, upper, cur_l, mid_val)
             + self.range_freq_rec(level + 1, l1, r1, lower, upper, mid_val, cur_r)
     }
